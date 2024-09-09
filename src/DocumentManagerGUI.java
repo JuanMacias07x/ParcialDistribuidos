@@ -1,156 +1,189 @@
 import javax.swing.*;
+import javax.swing.tree.DefaultMutableTreeNode;
+import javax.swing.tree.DefaultTreeModel;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.File;
+import java.io.FileInputStream;
 import java.nio.file.Files;
 
 public class DocumentManagerGUI extends JFrame {
-
+    private RPCClient client;
+    private JTree fileTree;
+    private DefaultTreeModel treeModel;
     private JTextArea logArea;
-    private RPCClient rpcClient;
 
-    public DocumentManagerGUI(RPCClient rpcClient) {
-        this.rpcClient = rpcClient;
-        initializeUI();
-    }
-
-    private void initializeUI() {
+    public DocumentManagerGUI() {
+        client = new RPCClient();
         setTitle("Gestor Documental - Cliente RPC");
         setSize(600, 400);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
+        initUI();
+        refreshFileList();
+    }
+
+    private void initUI() {
+        // Layout principal
         setLayout(new BorderLayout());
 
-        // Panel izquierdo: Explorador de archivos (removido porque era un ejemplo)
-        JPanel fileTreePanel = new JPanel(new BorderLayout());
-        JLabel treeLabel = new JLabel("Explorador de Archivos");
-        JTree fileTree = new JTree(); // Aún no funcional
-        fileTreePanel.add(treeLabel, BorderLayout.NORTH);
-        fileTreePanel.add(new JScrollPane(fileTree), BorderLayout.CENTER);
+        // Crear el panel izquierdo con el árbol de archivos
+        DefaultMutableTreeNode root = new DefaultMutableTreeNode("Archivos");
+        treeModel = new DefaultTreeModel(root);
+        fileTree = new JTree(treeModel);
+        JScrollPane treeScrollPane = new JScrollPane(fileTree);
+        add(treeScrollPane, BorderLayout.CENTER);
 
-        // Panel derecho: Lista de archivos con menú contextual
-        JPanel fileListPanel = new JPanel(new BorderLayout());
-        JLabel listLabel = new JLabel("Archivos en el servidor");
-        DefaultListModel<String> fileListModel = new DefaultListModel<>(); // Modelo para la lista de archivos
-        JList<String> fileList = new JList<>(fileListModel); // Lista dinámica
-        fileListPanel.add(listLabel, BorderLayout.NORTH);
-        fileListPanel.add(new JScrollPane(fileList), BorderLayout.CENTER);
+        // Panel derecho con botones de acciones
+        JPanel actionPanel = new JPanel();
+        actionPanel.setLayout(new BoxLayout(actionPanel, BoxLayout.Y_AXIS));
+        JButton uploadButton = new JButton("Subir Archivo");
+        JButton renameButton = new JButton("Renombrar Archivo");
+        JButton propertiesButton = new JButton("Ver Propiedades");
+        JButton downloadButton = new JButton("Descargar Archivo");
 
-        // Menú contextual
-        fileList.addMouseListener(new MouseAdapter() {
-            public void mouseClicked(MouseEvent e) {
-                if (SwingUtilities.isRightMouseButton(e)) {
-                    int index = fileList.locationToIndex(e.getPoint());
-                    String selectedFile = fileList.getModel().getElementAt(index);
-                    showFileOptionsMenu(e.getX(), e.getY(), selectedFile);
+        actionPanel.add(uploadButton);
+        actionPanel.add(renameButton);
+        actionPanel.add(propertiesButton);
+        actionPanel.add(downloadButton);
+        add(actionPanel, BorderLayout.EAST);
+
+        // Área de logs
+        logArea = new JTextArea(5, 30);
+        logArea.setEditable(false);
+        JScrollPane logScrollPane = new JScrollPane(logArea);
+        add(logScrollPane, BorderLayout.SOUTH);
+
+        // Acción para subir archivos
+        uploadButton.addActionListener(e -> uploadFile());
+
+        // Acción para renombrar archivos
+        renameButton.addActionListener(e -> renameFile());
+
+        // Acción para ver propiedades de archivo
+        propertiesButton.addActionListener(e -> viewFileProperties());
+
+        // Acción para descargar archivo
+        downloadButton.addActionListener(e -> downloadFile());
+
+        // Agregar menú contextual
+        fileTree.addMouseListener(new MouseAdapter() {
+            public void mousePressed(MouseEvent e) {
+                if (e.isPopupTrigger() || SwingUtilities.isRightMouseButton(e)) {
+                    int row = fileTree.getClosestRowForLocation(e.getX(), e.getY());
+                    fileTree.setSelectionRow(row);
+                    showContextMenu(e.getX(), e.getY());
                 }
             }
         });
+    }
 
-        // Panel inferior: Área de log
-        logArea = new JTextArea();
-        logArea.setEditable(false);
-        JScrollPane logScrollPane = new JScrollPane(logArea);
+    private void showContextMenu(int x, int y) {
+        JPopupMenu contextMenu = new JPopupMenu();
+        JMenuItem downloadItem = new JMenuItem("Descargar");
+        JMenuItem renameItem = new JMenuItem("Renombrar");
+        JMenuItem propertiesItem = new JMenuItem("Propiedades");
 
-        // Botón para subir archivo
-        JButton uploadButton = new JButton("Subir Archivo");
-        uploadButton.addActionListener(e -> uploadFile());
+        contextMenu.add(downloadItem);
+        contextMenu.add(renameItem);
+        contextMenu.add(propertiesItem);
 
-        JPanel buttonPanel = new JPanel();
-        buttonPanel.add(uploadButton);
+        downloadItem.addActionListener(e -> downloadFile());
+        renameItem.addActionListener(e -> renameFile());
+        propertiesItem.addActionListener(e -> viewFileProperties());
 
-        add(fileTreePanel, BorderLayout.WEST);
-        add(fileListPanel, BorderLayout.CENTER);
-        add(logScrollPane, BorderLayout.SOUTH);
-        add(buttonPanel, BorderLayout.NORTH);
-
-        setVisible(true);
+        contextMenu.show(fileTree, x, y);
     }
 
     private void uploadFile() {
-        try {
-            JFileChooser fileChooser = new JFileChooser();
-            int option = fileChooser.showOpenDialog(this);
-            if (option == JFileChooser.APPROVE_OPTION) {
-                File selectedFile = fileChooser.getSelectedFile();
+        JFileChooser fileChooser = new JFileChooser();
+        int option = fileChooser.showOpenDialog(this);
+        if (option == JFileChooser.APPROVE_OPTION) {
+            File selectedFile = fileChooser.getSelectedFile();
+            try {
                 byte[] fileData = Files.readAllBytes(selectedFile.toPath());
-                rpcClient.uploadFile(selectedFile.getName(), fileData);
-                logArea.append("Archivo subido: " + selectedFile.getName() + "\n");
+                String response = client.uploadFile(selectedFile.getName(), fileData);
+                logArea.append(response + "\n");
+                refreshFileList();
+            } catch (Exception e) {
+                e.printStackTrace();
+                logArea.append("Error al subir el archivo.\n");
             }
-        } catch (Exception e) {
-            logArea.append("Error al subir el archivo.\n");
-            e.printStackTrace();
         }
     }
 
-    private void showFileOptionsMenu(int x, int y, String selectedFileName) {
-        JPopupMenu menu = new JPopupMenu();
-
-        JMenuItem downloadItem = new JMenuItem("Descargar");
-        downloadItem.addActionListener(e -> downloadFile(selectedFileName));
-
-        JMenuItem renameItem = new JMenuItem("Renombrar");
-        renameItem.addActionListener(e -> renameFile(selectedFileName));
-
-        JMenuItem propertiesItem = new JMenuItem("Propiedades");
-        propertiesItem.addActionListener(e -> showFileProperties(selectedFileName));
-
-        menu.add(downloadItem);
-        menu.add(renameItem);
-        menu.add(propertiesItem);
-
-        menu.show(this, x, y);
-    }
-
-    private void downloadFile(String fileName) {
-        try {
-            byte[] fileData = rpcClient.downloadFile(fileName);
+    private void downloadFile() {
+        DefaultMutableTreeNode selectedNode = (DefaultMutableTreeNode) fileTree.getLastSelectedPathComponent();
+        if (selectedNode != null) {
+            String fileName = selectedNode.getUserObject().toString();
+            byte[] fileData = client.downloadFile(fileName);
             if (fileData != null) {
                 JFileChooser fileChooser = new JFileChooser();
                 fileChooser.setSelectedFile(new File(fileName));
                 int option = fileChooser.showSaveDialog(this);
                 if (option == JFileChooser.APPROVE_OPTION) {
-                    File selectedFile = fileChooser.getSelectedFile();
-                    Files.write(selectedFile.toPath(), fileData);
-                    logArea.append("Archivo descargado: " + fileName + "\n");
+                    try {
+                        File file = fileChooser.getSelectedFile();
+                        Files.write(file.toPath(), fileData);
+                        logArea.append("Archivo descargado: " + fileName + "\n");
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        logArea.append("Error al descargar el archivo.\n");
+                    }
                 }
             } else {
-                logArea.append("Error al descargar el archivo.\n");
+                logArea.append("El archivo no existe o hubo un error en la descarga.\n");
             }
-        } catch (Exception e) {
-            logArea.append("Error al descargar el archivo.\n");
-            e.printStackTrace();
+        } else {
+            logArea.append("Selecciona un archivo para descargar.\n");
         }
     }
 
-    private void renameFile(String selectedFileName) {
-        String newFileName = JOptionPane.showInputDialog(this, "Nuevo nombre del archivo:", selectedFileName);
-        if (newFileName != null && !newFileName.trim().isEmpty()) {
-            try {
-                rpcClient.renameFile(selectedFileName, newFileName);
-                logArea.append("Archivo renombrado: " + selectedFileName + " a " + newFileName + "\n");
-            } catch (Exception e) {
-                logArea.append("Error al renombrar el archivo.\n");
-                e.printStackTrace();
+    private void renameFile() {
+        DefaultMutableTreeNode selectedNode = (DefaultMutableTreeNode) fileTree.getLastSelectedPathComponent();
+        if (selectedNode != null) {
+            String oldFileName = selectedNode.getUserObject().toString();
+            String newFileName = JOptionPane.showInputDialog(this, "Nuevo nombre:", oldFileName);
+            if (newFileName != null && !newFileName.trim().isEmpty()) {
+                String response = client.renameFile(oldFileName, newFileName);
+                logArea.append(response + "\n");
+                refreshFileList();
             }
+        } else {
+            logArea.append("Selecciona un archivo para renombrar.\n");
         }
     }
 
-    private void showFileProperties(String selectedFileName) {
-        try {
-            String properties = rpcClient.getFileProperties(selectedFileName);
+    private void viewFileProperties() {
+        DefaultMutableTreeNode selectedNode = (DefaultMutableTreeNode) fileTree.getLastSelectedPathComponent();
+        if (selectedNode != null) {
+            String fileName = selectedNode.getUserObject().toString();
+            String properties = client.getFileProperties(fileName);
             JOptionPane.showMessageDialog(this, properties, "Propiedades del archivo", JOptionPane.INFORMATION_MESSAGE);
+        } else {
+            logArea.append("Selecciona un archivo para ver sus propiedades.\n");
+        }
+    }
+
+    private void refreshFileList() {
+        try {
+            String[] files = client.listFiles();
+            DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
+            root.removeAllChildren();
+            for (String file : files) {
+                root.add(new DefaultMutableTreeNode(file));
+            }
+            treeModel.reload();
         } catch (Exception e) {
-            logArea.append("Error al obtener las propiedades del archivo.\n");
             e.printStackTrace();
+            logArea.append("Error al actualizar la lista de archivos.\n");
         }
     }
 
     public static void main(String[] args) {
-        try {
-            RPCClient rpcClient = new RPCClient();
-            SwingUtilities.invokeLater(() -> new DocumentManagerGUI(rpcClient));
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        SwingUtilities.invokeLater(() -> {
+            DocumentManagerGUI gui = new DocumentManagerGUI();
+            gui.setVisible(true);
+        });
     }
 }

@@ -1,11 +1,16 @@
-import java.io.*;
-import java.rmi.*;
-import java.rmi.registry.*;
-import java.rmi.server.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
 
 public class RPCServer extends UnicastRemoteObject implements FileManager {
 
     public RPCServer() throws RemoteException {
+        super();
     }
 
     @Override
@@ -26,8 +31,11 @@ public class RPCServer extends UnicastRemoteObject implements FileManager {
     public byte[] downloadFile(String fileName) throws RemoteException {
         try {
             File file = new File("server_storage/" + fileName);
-            byte[] fileData = new byte[(int) file.length()];
+            if (!file.exists()) {
+                return null;
+            }
             FileInputStream fis = new FileInputStream(file);
+            byte[] fileData = new byte[(int) file.length()];
             fis.read(fileData);
             fis.close();
             return fileData;
@@ -38,13 +46,24 @@ public class RPCServer extends UnicastRemoteObject implements FileManager {
     }
 
     @Override
-    public void renameFile(String oldFileName, String newFileName) throws RemoteException {
+    public String[] listFiles() throws RemoteException {
+        File folder = new File("server_storage");
+        return folder.list(); // Devuelve una lista de nombres de archivos
+    }
+
+    @Override
+    public String renameFile(String oldFileName, String newFileName) throws RemoteException {
         File oldFile = new File("server_storage/" + oldFileName);
         File newFile = new File("server_storage/" + newFileName);
-        if (oldFile.exists()) {
-            oldFile.renameTo(newFile);
+        if (oldFile.exists() && !newFile.exists()) {
+            boolean success = oldFile.renameTo(newFile);
+            if (success) {
+                return "File renamed successfully.";
+            } else {
+                return "File renaming failed.";
+            }
         } else {
-            throw new RemoteException("El archivo no existe.");
+            return "File not found or new file name already exists.";
         }
     }
 
@@ -52,21 +71,24 @@ public class RPCServer extends UnicastRemoteObject implements FileManager {
     public String getFileProperties(String fileName) throws RemoteException {
         File file = new File("server_storage/" + fileName);
         if (file.exists()) {
-            long fileSize = file.length();
-            long lastModified = file.lastModified();
-            return "Nombre: " + file.getName() + "\nTamaño: " + fileSize + " bytes\nÚltima modificación: "
-                    + new java.util.Date(lastModified);
+            return "File: " + file.getName() + "\nSize: " + file.length() + " bytes\nLast Modified: "
+                    + file.lastModified();
         } else {
-            throw new RemoteException("El archivo no existe.");
+            return "File not found.";
         }
     }
 
     public static void main(String[] args) {
         try {
+            File folder = new File("server_storage");
+            if (!folder.exists()) {
+                folder.mkdir(); // Crear carpeta si no existe
+            }
+
             RPCServer server = new RPCServer();
             Registry registry = LocateRegistry.createRegistry(1099);
             registry.rebind("FileManager", server);
-            System.out.println("Servidor RPC listo.");
+            System.out.println("RPC Server is running...");
         } catch (Exception e) {
             e.printStackTrace();
         }

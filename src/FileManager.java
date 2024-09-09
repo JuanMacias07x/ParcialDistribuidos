@@ -6,7 +6,9 @@ public interface FileManager extends Remote {
 
     byte[] downloadFile(String fileName) throws RemoteException;
 
-    void renameFile(String oldFileName, String newFileName) throws RemoteException;
+    String[] listFiles() throws RemoteException;
+
+    String renameFile(String oldFileName, String newFileName) throws RemoteException;
 
     String getFileProperties(String fileName) throws RemoteException;
 }

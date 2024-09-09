@@ -1,27 +1,60 @@
-
-import java.rmi.Naming;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
 
 public class RPCClient {
     private FileManager fileManager;
 
-    public RPCClient() throws Exception {
-        fileManager = (FileManager) Naming.lookup("rmi://localhost:1099/FileManager");
-        System.out.println("Conectado al servidor RPC");
+    public RPCClient() {
+        try {
+            Registry registry = LocateRegistry.getRegistry("localhost", 1099);
+            fileManager = (FileManager) registry.lookup("FileManager");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
-    public void uploadFile(String fileName, byte[] fileData) throws Exception {
-        fileManager.uploadFile(fileName, fileData);
+    public String uploadFile(String fileName, byte[] fileData) {
+        try {
+            return fileManager.uploadFile(fileName, fileData);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "Error uploading file.";
+        }
     }
 
-    public byte[] downloadFile(String fileName) throws Exception {
-        return fileManager.downloadFile(fileName);
+    public byte[] downloadFile(String fileName) {
+        try {
+            return fileManager.downloadFile(fileName);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 
-    public void renameFile(String oldFileName, String newFileName) throws Exception {
-        fileManager.renameFile(oldFileName, newFileName);
+    public String[] listFiles() {
+        try {
+            return fileManager.listFiles();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new String[] {};
+        }
     }
 
-    public String getFileProperties(String fileName) throws Exception {
-        return fileManager.getFileProperties(fileName);
+    public String renameFile(String oldFileName, String newFileName) {
+        try {
+            return fileManager.renameFile(oldFileName, newFileName);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "Error renaming file.";
+        }
+    }
+
+    public String getFileProperties(String fileName) {
+        try {
+            return fileManager.getFileProperties(fileName);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "Error retrieving file properties.";
+        }
     }
 }
