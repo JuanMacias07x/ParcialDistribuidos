@@ -1,6 +1,6 @@
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
@@ -48,7 +48,7 @@ public class RPCServer extends UnicastRemoteObject implements FileManager {
     @Override
     public String[] listFiles() throws RemoteException {
         File folder = new File("server_storage");
-        return folder.list(); // Devuelve una lista de nombres de archivos
+        return folder.list(); // Devuelve una lista de nombres de archivos y carpetas
     }
 
     @Override
@@ -75,6 +75,46 @@ public class RPCServer extends UnicastRemoteObject implements FileManager {
                     + file.lastModified();
         } else {
             return "File not found.";
+        }
+    }
+
+    @Override
+    public boolean createFolder(String path) throws RemoteException {
+        File folder = new File(path);
+        if (!folder.exists()) {
+            return folder.mkdirs();
+        }
+        return false;
+    }
+
+    @Override
+    public String deleteFile(String fileName) throws RemoteException {
+        File file = new File("server_storage/" + fileName);
+        if (file.exists()) {
+            if (file.isDirectory()) {
+                file.delete(); // Borra la carpeta
+            } else {
+                file.delete(); // Borra el archivo
+            }
+            return "File deleted successfully.";
+        } else {
+            return "File not found.";
+        }
+    }
+
+    @Override
+    public String moveFile(String fileName, String targetFolder) throws RemoteException {
+        File file = new File("server_storage/" + fileName);
+        File targetDir = new File("server_storage/" + targetFolder);
+        if (file.exists() && targetDir.isDirectory()) {
+            File newFile = new File(targetDir, file.getName());
+            if (file.renameTo(newFile)) {
+                return "File moved successfully.";
+            } else {
+                return "Failed to move file.";
+            }
+        } else {
+            return "File or target folder not found.";
         }
     }
 

@@ -57,4 +57,31 @@ public class RPCClient {
             return "Error retrieving file properties.";
         }
     }
+
+    public boolean createFolder(String path) {
+        try {
+            return fileManager.createFolder(path);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public String deleteFile(String fileName) {
+        try {
+            return fileManager.deleteFile(fileName);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "Error deleting file.";
+        }
+    }
+
+    public String moveFile(String fileName, String targetFolder) {
+        try {
+            return fileManager.moveFile(fileName, targetFolder);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "Error moving file.";
+        }
+    }
 }
