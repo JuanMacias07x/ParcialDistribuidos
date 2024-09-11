@@ -24,7 +24,7 @@ public class DocumentManagerGUI extends JFrame {
     }
 
     private void initUI() {
-        // Layout principal
+        // Layout principalll
         setLayout(new BorderLayout());
 
         // Crear el panel izquierdo con el árbol de archivos
